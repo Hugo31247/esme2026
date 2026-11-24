@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:esme26/application/onboarding_controller.dart';
+import 'package:esme26/data/repositories/in_memory_user_repository.dart';
 import 'package:esme26/domain/models/user.dart';
 import 'package:esme26/domain/onboarding/onboarding_flow.dart';
 import 'package:esme26/domain/repositories/kyc_repository.dart';
@@ -8,11 +9,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late _KycRepository repository;
+  late InMemoryUserRepository userRepository;
   late OnboardingController controller;
+  final createdAt = DateTime.utc(2026, 11, 10);
 
   setUp(() {
     repository = _KycRepository();
-    controller = OnboardingController(kycRepository: repository);
+    userRepository = InMemoryUserRepository();
+    controller = OnboardingController(
+      kycRepository: repository,
+      userRepository: userRepository,
+      createUserId: () => 'user-new',
+      now: () => createdAt,
+    );
   });
 
   tearDown(() => controller.dispose());
@@ -48,6 +57,31 @@ void main() {
     expect(controller.requestBack(), isFalse);
     expect(notifications, 7);
     expect(repository.calls, 0);
+
+    final user = userRepository.me()!;
+    expect(userRepository.getById('user-new'), same(user));
+    expect(user.firstName, 'Camille');
+    expect(user.lastName, 'Martin');
+    expect(user.roles, {UserRole.customer});
+    expect(user.adress.city, 'Paris');
+    expect(user.adress.postalCode, '75001');
+    expect(user.adress.country, 'France');
+    expect(user.createdAt, createdAt);
+  });
+
+  test('The user is only stored once onboarding completes', () async {
+    reachKyc();
+    expect(userRepository.getById('user-new'), isNull);
+    expect(userRepository.me()?.id, isNot('user-new'));
+
+    final pending = controller.verifyIdentity();
+    repository.request.complete(KycResult.approved);
+    await pending;
+
+    final user = userRepository.me()!;
+    expect(user.id, 'user-new');
+    expect(user.roles, {UserRole.artisan});
+    expect(user.adress.city, 'Paris');
   });
 
   test('KYC blocks back and duplicate requests until approval', () async {
@@ -63,27 +97,30 @@ void main() {
     expect(controller.isVerifying, isFalse);
   });
 
-  test('Rejection and typed errors permit retries without completing', () async {
-    reachKyc();
-    var pending = controller.verifyIdentity();
-    repository.request.complete(KycResult.rejected);
-    await pending;
-    expect(controller.kycStatus, KycStatus.rejected);
-    expect(controller.step, OnboardingStep.kyc);
+  test(
+    'Rejection and typed errors permit retries without completing',
+    () async {
+      reachKyc();
+      var pending = controller.verifyIdentity();
+      repository.request.complete(KycResult.rejected);
+      await pending;
+      expect(controller.kycStatus, KycStatus.rejected);
+      expect(controller.step, OnboardingStep.kyc);
 
-    pending = controller.verifyIdentity();
-    repository.request.completeError(const KycException('Unavailable'));
-    await pending;
-    expect(controller.kycStatus, KycStatus.failed);
-    expect(controller.kycError, 'Unavailable');
-    expect(controller.canGoBack, isTrue);
+      pending = controller.verifyIdentity();
+      repository.request.completeError(const KycException('Unavailable'));
+      await pending;
+      expect(controller.kycStatus, KycStatus.failed);
+      expect(controller.kycError, 'Unavailable');
+      expect(controller.canGoBack, isTrue);
 
-    pending = controller.verifyIdentity();
-    expect(controller.kycError, isNull);
-    repository.request.complete(KycResult.approved);
-    await pending;
-    expect(controller.isCompleted, isTrue);
-  });
+      pending = controller.verifyIdentity();
+      expect(controller.kycError, isNull);
+      repository.request.complete(KycResult.approved);
+      await pending;
+      expect(controller.isCompleted, isTrue);
+    },
+  );
 
   test('Leaving KYC clears its error', () async {
     reachKyc();
@@ -111,7 +148,11 @@ void main() {
   });
 
   test('Disposed controllers ignore late KYC results', () async {
-    final disposable = OnboardingController(kycRepository: repository);
+    final disposable = OnboardingController(
+      kycRepository: repository,
+      userRepository: userRepository,
+      createUserId: () => 'user-new',
+    );
     disposable.chooseRole(UserRole.artisan);
     disposable.updateTrade('Potier');
     disposable.next();
@@ -123,6 +164,7 @@ void main() {
     repository.request.complete(KycResult.approved);
     await pending;
     expect(disposable.isCompleted, isFalse);
+    expect(userRepository.getById('user-new'), isNull);
   });
 }
 

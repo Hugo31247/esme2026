@@ -50,6 +50,25 @@ reelle. L'interface signale explicitement cette simulation ; refus et erreurs
 `KycException` permettent de reessayer. Ce resultat ne confere aucun statut
 verifie au compte ou au profil artisan.
 
+## Carte d'accueil
+
+Solution provisoire, gratuite et hors ligne, en attendant une vraie API de
+cartographie. La carte de l'accueil est dessinee par `flutter_map` (pur Dart,
+toutes plateformes) a partir de `assets/maps/ile_de_france.json` (~1,5 Mo) :
+routes principales d'Ile-de-France (autoroutes a routes tertiaires), rivieres,
+limite regionale et noms des villes. Aucun serveur de tuiles, aucune cle API,
+aucun reseau.
+
+- Les routes secondaires, tertiaires et les noms de communes n'apparaissent
+  qu'en zoomant, pour garder la carte lisible et fluide.
+- Regenerer les donnees : `python3 tool/build_region_map.py` (telecharge
+  OpenStreetMap via l'API Overpass, cache dans `build/osm`).
+- Code : `RegionMapRepository` (domaine + facade + implementation par asset),
+  `RegionMapController`, widgets `lib/ui/widgets/home/`. Pour passer a une
+  vraie API, remplacer le rendu de `RegionMapCanvas` (ex. un `TileLayer`).
+- Donnees OpenStreetMap sous licence ODbL : conserver l'attribution
+  « © OpenStreetMap contributors » affichee sur la carte.
+
 ## Modeles metier : particuliers et artisans
 
 Les classes sont dans [`lib/domain/models/`](lib/domain/models/).

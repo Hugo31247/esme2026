@@ -18,7 +18,12 @@ void main() {
     expect(flow.next, throwsStateError);
     expect(flow.back, throwsStateError);
     flow.chooseRole(UserRole.artisan);
-    expect(flow.steps, [OnboardingStep.role, OnboardingStep.trade, OnboardingStep.location, OnboardingStep.kyc]);
+    expect(flow.steps, [
+      OnboardingStep.role,
+      OnboardingStep.trade,
+      OnboardingStep.location,
+      OnboardingStep.kyc,
+    ]);
     expect(flow.stepNumber, 2);
     expect(flow.next, throwsStateError);
     flow.trade = '   ';
@@ -43,7 +48,12 @@ void main() {
 
   test('Customer requires interests, name and location, without KYC', () {
     flow.chooseRole(UserRole.customer);
-    expect(flow.steps, [OnboardingStep.role, OnboardingStep.interests, OnboardingStep.name, OnboardingStep.location]);
+    expect(flow.steps, [
+      OnboardingStep.role,
+      OnboardingStep.interests,
+      OnboardingStep.name,
+      OnboardingStep.location,
+    ]);
     expect(flow.next, throwsStateError);
     flow.toggleInterest('Bois');
     flow.toggleInterest('Bois');
@@ -96,5 +106,31 @@ void main() {
     expect(() => flow.chooseRole(UserRole.customer), throwsStateError);
     expect(() => flow.toggleInterest('Bois'), throwsStateError);
     expect(flow.completeKyc, throwsStateError);
+  });
+
+  test('A completed onboarding builds the collected user', () {
+    final createdAt = DateTime.utc(2026, 11, 10);
+    expect(
+      () => flow.buildUser(id: 'user-1', createdAt: createdAt),
+      throwsStateError,
+    );
+    flow.chooseRole(UserRole.customer);
+    flow.toggleInterest('Bois');
+    flow.next();
+    flow.firstName = ' Camille ';
+    flow.lastName = 'Martin';
+    flow.next();
+    fillLocation();
+    flow.next();
+
+    final user = flow.buildUser(id: 'user-1', createdAt: createdAt);
+    expect(user.id, 'user-1');
+    expect(user.firstName, 'Camille');
+    expect(user.lastName, 'Martin');
+    expect(user.roles, {UserRole.customer});
+    expect(user.adress.city, 'Paris');
+    expect(user.adress.postalCode, '75001');
+    expect(user.adress.country, 'France');
+    expect(user.createdAt, createdAt);
   });
 }

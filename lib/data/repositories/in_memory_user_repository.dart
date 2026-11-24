@@ -3,13 +3,15 @@ import 'package:esme26/data/repositories/in_memory_repository.dart';
 import 'package:esme26/domain/models/user.dart';
 import 'package:esme26/domain/repositories/user_repository.dart';
 
-class InMemoryUserRepository extends InMemoryRepository<User, String> implements UserRepository {
+class InMemoryUserRepository extends InMemoryRepository<User, String>
+    implements UserRepository {
   User? user = MockData.customer;
 
-  InMemoryUserRepository() : super(MockData.users, keyOf: (item) => requireRepositoryId(item.id));
+  InMemoryUserRepository()
+    : super(MockData.users, keyOf: (item) => requireRepositoryId(item.id));
 
   @override
-  User? getUser() => user;
+  User? me() => user;
 
   @override
   void setUser(User user) {

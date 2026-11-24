@@ -257,22 +257,25 @@ void main() {
   );
 
   group('In-memory storage', () {
-    test('upsert replaces content, inserts new ids and preserves snapshots', () {
-      final repository = InMemoryRepository<Trade, String>([
-        const Trade(id: 'trade', name: 'Initial'),
-      ], keyOf: (item) => requireRepositoryId(item.id));
-      final snapshot = repository.getAll();
-      const replacement = Trade(id: 'trade', name: 'Updated');
-      repository.save(replacement);
-      expect(repository.getById('trade'), same(replacement));
-      expect(repository.getAll(), hasLength(1));
-      expect(snapshot.single.name, 'Initial');
-      repository.save(const Trade(id: 'other', name: 'Other'));
-      expect(repository.getAll(), hasLength(2));
-      repository.reset();
-      expect(repository.getById('other'), isNull);
-      expect(repository.getById('trade')!.name, 'Initial');
-    });
+    test(
+      'upsert replaces content, inserts new ids and preserves snapshots',
+      () {
+        final repository = InMemoryRepository<Trade, String>([
+          const Trade(id: 'trade', name: 'Initial'),
+        ], keyOf: (item) => requireRepositoryId(item.id));
+        final snapshot = repository.getAll();
+        const replacement = Trade(id: 'trade', name: 'Updated');
+        repository.save(replacement);
+        expect(repository.getById('trade'), same(replacement));
+        expect(repository.getAll(), hasLength(1));
+        expect(snapshot.single.name, 'Initial');
+        repository.save(const Trade(id: 'other', name: 'Other'));
+        expect(repository.getAll(), hasLength(2));
+        repository.reset();
+        expect(repository.getById('other'), isNull);
+        expect(repository.getById('trade')!.name, 'Initial');
+      },
+    );
 
     test('duplicate seed ids fail explicitly', () {
       expect(
@@ -288,7 +291,10 @@ void main() {
       final repository = TradeRepositoryImpl();
       addTearDown(repository.reset);
       for (final id in ['', ' \n ']) {
-        expect(() => repository.save(Trade(id: id, name: 'Invalid')), throwsArgumentError);
+        expect(
+          () => repository.save(Trade(id: id, name: 'Invalid')),
+          throwsArgumentError,
+        );
       }
       expect(repository.getAll(), orderedEquals(MockData.trades));
       expect(() => requireRepositoryId(null), throwsArgumentError);
@@ -297,13 +303,36 @@ void main() {
     test('favorite keys cannot collide through string concatenation', () {
       final repository = FavoriteRepositoryImpl();
       addTearDown(repository.reset);
-      final first = Favorite(customerId: 'a:b', artisanId: 'c', createdAt: MockData.createdAt);
-      final second = Favorite(customerId: 'a', artisanId: 'b:c', createdAt: MockData.createdAt);
+      final first = Favorite(
+        customerId: 'a:b',
+        artisanId: 'c',
+        createdAt: MockData.createdAt,
+      );
+      final second = Favorite(
+        customerId: 'a',
+        artisanId: 'b:c',
+        createdAt: MockData.createdAt,
+      );
       repository.save(first);
       repository.save(second);
-      expect(repository.getById((customerId: 'a:b', artisanId: 'c')), same(first));
-      expect(repository.getById((customerId: 'a', artisanId: 'b:c')), same(second));
-      expect(() => repository.save(Favorite(customerId: '', artisanId: 'artisan', createdAt: MockData.createdAt)), throwsArgumentError);
+      expect(
+        repository.getById((customerId: 'a:b', artisanId: 'c')),
+        same(first),
+      );
+      expect(
+        repository.getById((customerId: 'a', artisanId: 'b:c')),
+        same(second),
+      );
+      expect(
+        () => repository.save(
+          Favorite(
+            customerId: '',
+            artisanId: 'artisan',
+            createdAt: MockData.createdAt,
+          ),
+        ),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -318,8 +347,8 @@ void main() {
       test('default current user is present in the user catalog', () {
         final repository = create();
         expect(create(), same(repository));
-        expect(repository.getUser(), same(MockData.customer));
-        expect(repository.getById(repository.getUser()!.id!), same(repository.getUser()));
+        expect(repository.me(), same(MockData.customer));
+        expect(repository.getById(repository.me()!.id!), same(repository.me()));
       });
 
       test('onboarding drafts remain usable without a persistent id', () {
@@ -331,30 +360,33 @@ void main() {
           adress: MockData.adress,
         );
         create().setUser(draft);
-        expect(create().getUser(), same(draft));
+        expect(create().me(), same(draft));
         expect(create().getAll(), orderedEquals(MockData.users));
         expect(() => create().save(draft), throwsArgumentError);
       });
 
-      test('saving and deleting the current user keep the session consistent', () {
-        final replacement = User(
-          id: 'customer-1',
-          firstName: 'Updated',
-          lastName: 'Client',
-          email: 'updated@example.test',
-          birthDateInMillisFromEpoch: 0,
-          adress: MockData.adress,
-        );
-        final repository = create();
-        repository.save(replacement);
-        expect(repository.getUser(), same(replacement));
-        expect(repository.getById('customer-1'), same(replacement));
-        repository.delete('customer-1');
-        expect(repository.getUser(), isNull);
-        expect(repository.getById('customer-1'), isNull);
-        repository.reset();
-        expect(repository.getUser(), same(MockData.customer));
-      });
+      test(
+        'saving and deleting the current user keep the session consistent',
+        () {
+          final replacement = User(
+            id: 'customer-1',
+            firstName: 'Updated',
+            lastName: 'Client',
+            email: 'updated@example.test',
+            birthDateInMillisFromEpoch: 0,
+            adress: MockData.adress,
+          );
+          final repository = create();
+          repository.save(replacement);
+          expect(repository.me(), same(replacement));
+          expect(repository.getById('customer-1'), same(replacement));
+          repository.delete('customer-1');
+          expect(repository.me(), isNull);
+          expect(repository.getById('customer-1'), isNull);
+          repository.reset();
+          expect(repository.me(), same(MockData.customer));
+        },
+      );
 
       test('selecting a persistent user updates the shared catalog', () {
         final persisted = User(
@@ -366,10 +398,10 @@ void main() {
           adress: MockData.adress,
         );
         create().setUser(persisted);
-        expect(create().getUser(), same(persisted));
+        expect(create().me(), same(persisted));
         expect(create().getById('customer-new'), same(persisted));
         create().delete('artisan-1');
-        expect(create().getUser(), same(persisted));
+        expect(create().me(), same(persisted));
       });
 
       test('invalid persistent user ids leave the session unchanged', () {
@@ -382,7 +414,7 @@ void main() {
           adress: MockData.adress,
         );
         expect(() => create().setUser(invalid), throwsArgumentError);
-        expect(create().getUser(), same(MockData.customer));
+        expect(create().me(), same(MockData.customer));
       });
     });
   }
