@@ -1,18 +1,31 @@
 import 'package:esme26/domain/models/user.dart';
 import 'package:esme26/domain/onboarding/onboarding_flow.dart';
 import 'package:esme26/domain/repositories/kyc_repository.dart';
+import 'package:esme26/domain/repositories/user_repository.dart';
 import 'package:flutter/foundation.dart';
 
 enum KycStatus { idle, verifying, rejected, failed }
 
 class OnboardingController extends ChangeNotifier {
   final KycRepository kycRepository;
+  final UserRepository userRepository;
+  final String Function() _createUserId;
+  final DateTime Function() _now;
   final OnboardingFlow _flow = OnboardingFlow();
   KycStatus _kycStatus = KycStatus.idle;
   String? _kycError;
   bool _disposed = false;
 
-  OnboardingController({required this.kycRepository});
+  OnboardingController({
+    required this.kycRepository,
+    required this.userRepository,
+    String Function()? createUserId,
+    DateTime Function()? now,
+  }) : _createUserId = createUserId ?? _defaultUserId,
+       _now = now ?? DateTime.now;
+
+  static String _defaultUserId() =>
+      'user-${DateTime.now().microsecondsSinceEpoch}';
 
   OnboardingStep get step => _flow.step;
   UserRole? get role => _flow.role;
@@ -53,6 +66,7 @@ class OnboardingController extends ChangeNotifier {
 
   void next() {
     _flow.next();
+    _saveUserIfCompleted();
     notifyListeners();
   }
 
@@ -77,6 +91,7 @@ class OnboardingController extends ChangeNotifier {
       if (_disposed) return;
       if (result == KycResult.approved) {
         _flow.completeKyc();
+        _saveUserIfCompleted();
         _kycStatus = KycStatus.idle;
       } else {
         _kycStatus = KycStatus.rejected;
@@ -91,6 +106,13 @@ class OnboardingController extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  void _saveUserIfCompleted() {
+    if (!isCompleted) return;
+    userRepository.setUser(
+      _flow.buildUser(id: _createUserId(), createdAt: _now()),
+    );
   }
 
   void _resetKyc() {

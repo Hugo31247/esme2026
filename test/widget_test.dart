@@ -1,7 +1,14 @@
 import 'dart:async';
 
+import 'package:esme26/data/mocks/mock_data.dart';
+import 'package:esme26/data/repositories/in_memory_user_repository.dart';
 import 'package:esme26/data/shared_preferences/shared_preference_keys.dart';
+import 'package:esme26/domain/models/geo_point.dart';
+import 'package:esme26/domain/models/region_map.dart';
+import 'package:esme26/domain/models/user.dart';
 import 'package:esme26/domain/repositories/kyc_repository.dart';
+import 'package:esme26/domain/repositories/region_map_repository.dart';
+import 'package:esme26/domain/repositories/user_repository.dart';
 import 'package:esme26/main.dart';
 import 'package:esme26/ui/router.dart';
 import 'package:esme26/ui/theme/app_theme.dart';
@@ -9,17 +16,66 @@ import 'package:esme26/ui/widgets/onboarding/kyc_step.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _FakeRegionMapRepository implements RegionMapRepository {
+  int loads = 0;
+  Object? error;
+
+  static final map = RegionMap(
+    name: 'Test',
+    attribution: 'OpenStreetMap contributors',
+    southWest: GeoPoint(latitude: 48.1, longitude: 1.4),
+    northEast: GeoPoint(latitude: 49.3, longitude: 3.6),
+    roads: [
+      for (final roadClass in RoadClass.values)
+        MapRoad(
+          roadClass: roadClass,
+          points: [
+            GeoPoint(latitude: 48.85, longitude: 2.30),
+            GeoPoint(latitude: 48.86, longitude: 2.40),
+          ],
+        ),
+    ],
+    rivers: [
+      [
+        GeoPoint(latitude: 48.84, longitude: 2.30),
+        GeoPoint(latitude: 48.86, longitude: 2.36),
+      ],
+    ],
+    boundary: const [],
+    places: [
+      MapPlace(
+        name: 'Paris',
+        kind: PlaceKind.city,
+        position: GeoPoint(latitude: 48.8566, longitude: 2.3522),
+      ),
+    ],
+  );
+
+  @override
+  Future<RegionMap> load() async {
+    loads++;
+    if (error case final error?) throw error;
+    return map;
+  }
+}
 
 Future<GoRouter> pumpApp(
   WidgetTester tester, {
   KycRepository? kycRepository,
+  UserRepository? userRepository,
+  RegionMapRepository? regionMapRepository,
 }) async {
   final darkMode = ValueNotifier(false);
   final router = createRouter(
     darkMode: darkMode,
     onToggleDarkMode: () => darkMode.value = !darkMode.value,
     kycRepository: kycRepository,
+    userRepository: userRepository ?? InMemoryUserRepository(),
+    regionMapRepository: regionMapRepository ?? _FakeRegionMapRepository(),
   );
   addTearDown(() {
     router.dispose();
@@ -118,10 +174,55 @@ void main() {
     expect(preferences.getBool(isDarkMode), isFalse);
   });
 
+  testWidgets('Home without route data shows the stored current user', (
+    tester,
+  ) async {
+    final userRepository = InMemoryUserRepository()..setUser(MockData.artisan);
+    final router = await pumpApp(tester, userRepository: userRepository);
+
+    router.go('/homepage');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(MockData.artisan.firstName), findsWidgets);
+    expect(find.textContaining('John Doe'), findsNothing);
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    expect(map.options.initialCenter, const LatLng(48.8566, 2.3522));
+    expect(tester.getSize(find.byType(FlutterMap)).height, greaterThan(100));
+    expect(find.text('Paris'), findsOneWidget);
+    expect(find.text('© OpenStreetMap contributors'), findsOneWidget);
+    // Initial zoom 11: outline, rivers and every road class but tertiary.
+    expect(find.byType(PolylineLayer), findsNWidgets(6));
+  });
+
+  testWidgets('Home map shows a retry when the offline map fails to load', (
+    tester,
+  ) async {
+    final regionMapRepository = _FakeRegionMapRepository()
+      ..error = const FormatException('broken map');
+    final userRepository = InMemoryUserRepository()..setUser(MockData.artisan);
+    final router = await pumpApp(
+      tester,
+      userRepository: userRepository,
+      regionMapRepository: regionMapRepository,
+    );
+
+    router.go('/homepage');
+    await tester.pumpAndSettle();
+    expect(find.text('La carte n’a pas pu être chargée.'), findsOneWidget);
+    expect(find.byType(FlutterMap), findsNothing);
+
+    regionMapRepository.error = null;
+    await tester.tap(find.text('Réessayer'));
+    await tester.pumpAndSettle();
+    expect(regionMapRepository.loads, 2);
+    expect(find.byType(FlutterMap), findsOneWidget);
+  });
+
   testWidgets('Customer flow validates fields and reaches home without KYC', (
     tester,
   ) async {
-    final router = await pumpApp(tester);
+    final userRepository = InMemoryUserRepository();
+    final router = await pumpApp(tester, userRepository: userRepository);
     await tapText(tester, 'Je suis particulier');
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
@@ -142,6 +243,8 @@ void main() {
     expect(find.text('Accueil'), findsOneWidget);
     expect(find.text('Bienvenue Camille !'), findsOneWidget);
     expect(router.routeInformationProvider.value.uri.path, '/homepage');
+    expect(userRepository.me()?.firstName, 'Camille');
+    expect(userRepository.me()?.roles, {UserRole.customer});
     expect(find.byType(KycStep), findsNothing);
     expect(find.byTooltip('Retour'), findsNothing);
   });

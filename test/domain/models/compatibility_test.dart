@@ -28,20 +28,33 @@ void main() {
       lastName: 'Client',
       email: 'client@example.test',
       birthDateInMillisFromEpoch: DateTime.utc(2000).millisecondsSinceEpoch,
-      adress: const Adress(street: '1 rue du Test', city: 'Paris', postalCode: '75001', country: 'France'),
+      adress: const Adress(
+        street: '1 rue du Test',
+        city: 'Paris',
+        postalCode: '75001',
+        country: 'France',
+      ),
     );
-    for (final repository in <UserRepository>[UserRepositoryJP(), UserRepositoryImpl()]) {
-      expect(repository.getUser(), isA<User>());
+    for (final repository in <UserRepository>[
+      UserRepositoryJP(),
+      UserRepositoryImpl(),
+    ]) {
+      expect(repository.me(), isA<User>());
       repository.setUser(user);
-      expect(repository.getUser(), same(user));
+      expect(repository.me(), same(user));
     }
   });
 
-  testWidgets('existing home screen still displays the repository user', (tester) async {
-    final user = UserRepository.instance.getUser()!;
+  testWidgets('existing home screen still displays the repository user', (
+    tester,
+  ) async {
+    final user = UserRepository.instance.me()!;
     await tester.pumpWidget(const MyApp());
     expect(find.text('Onboarding'), findsOneWidget);
-    expect(find.text('User enrolled: ${user.firstName} ${user.lastName}'), findsOneWidget);
+    expect(
+      find.text('User enrolled: ${user.firstName} ${user.lastName}'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

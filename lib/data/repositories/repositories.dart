@@ -16,6 +16,7 @@ export 'package:esme26/data/repositories/portfolio_project_repository.dart';
 export 'package:esme26/data/repositories/professional_document_repository.dart';
 export 'package:esme26/data/repositories/quote_repository.dart';
 export 'package:esme26/data/repositories/refund_repository.dart';
+export 'package:esme26/data/repositories/region_map_repository.dart';
 export 'package:esme26/data/repositories/review_repository.dart';
 export 'package:esme26/data/repositories/trade_repository.dart';
 export 'package:esme26/data/repositories/user_repository.dart';

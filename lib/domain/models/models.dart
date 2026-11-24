@@ -17,6 +17,7 @@ export 'package:esme26/domain/models/payment.dart';
 export 'package:esme26/domain/models/portfolio_project.dart';
 export 'package:esme26/domain/models/professional_document.dart';
 export 'package:esme26/domain/models/quote.dart';
+export 'package:esme26/domain/models/region_map.dart';
 export 'package:esme26/domain/models/review.dart';
 export 'package:esme26/domain/models/time_slot.dart';
 export 'package:esme26/domain/models/trade.dart';

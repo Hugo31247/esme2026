@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:esme26/data/database/app_database.dart';
+import 'package:esme26/data/repositories/drift_user_repository.dart';
 import 'package:esme26/data/shared_preferences/shared_preference_keys.dart';
+import 'package:esme26/domain/repositories/user_repository.dart';
 import 'package:esme26/ui/router.dart';
 import 'package:esme26/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -10,13 +13,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
-  runApp(MyApp(preferences: preferences));
+  final userRepository = await DriftUserRepository.open(
+    database: AppDatabase.open(),
+    preferences: preferences,
+  );
+  runApp(MyApp(preferences: preferences, userRepository: userRepository));
 }
 
 class MyApp extends StatefulWidget {
   final SharedPreferences preferences;
+  final UserRepository? userRepository;
 
-  const MyApp({super.key, required this.preferences});
+  const MyApp({super.key, required this.preferences, this.userRepository});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -35,6 +43,7 @@ class _MyAppState extends State<MyApp> {
     _router = createRouter(
       darkMode: _isDarkMode,
       onToggleDarkMode: _toggleDarkMode,
+      userRepository: widget.userRepository,
     );
   }
 
